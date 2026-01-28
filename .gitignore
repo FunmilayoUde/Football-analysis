@@ -1,0 +1,90 @@
+# -------------------------
+# Python
+# -------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# -------------------------
+# Virtual environments
+# -------------------------
+.venv/
+venv/
+env/
+ENV/
+*.venv
+
+# -------------------------
+# Environment / secrets
+# -------------------------
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.crt
+
+# -------------------------
+# VS Code / IDE
+# -------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# -------------------------
+# Jupyter / notebooks
+# -------------------------
+.ipynb_checkpoints/
+
+# -------------------------
+# Logs
+# -------------------------
+*.log
+
+# -------------------------
+# Model / cache folders (HuggingFace / Roboflow / inference)
+# -------------------------
+.hf_cache/
+.cache/
+**/.cache/
+**/wandb/
+wandb/
+runs/
+
+# If you ever use HF default cache folders
+hf_cache/
+huggingface/
+**/huggingface/
+
+# -------------------------
+# Outputs / generated artifacts
+# -------------------------
+outputs/
+output/
+results/
+*.csv
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# optional: if you want to keep outputs folder but ignore contents:
+# outputs/*
+# !outputs/.gitkeep
+
+# -------------------------
+# OS / misc
+# -------------------------
+*.tmp
+*.bak

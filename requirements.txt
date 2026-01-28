@@ -1,0 +1,30 @@
+numpy==1.26.4
+opencv-python==4.8.0.76
+tqdm==4.66.5
+requests==2.27
+
+# Config / validation
+pydantic==2.8.2
+pydantic-settings==2.4.0
+python-dotenv==1.0.1
+
+# API
+fastapi==0.110.3
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+
+# Frontend
+streamlit==1.38.0
+
+# CV tooling
+supervision==0.22.0
+inference==0.16.2
+
+# ML
+torch==2.4.1
+transformers==4.55.4
+tokenizers==0.21.4
+huggingface_hub==0.34.0
+safetensors==0.4.5
+
+git+https://github.com/roboflow/sports.git@main
