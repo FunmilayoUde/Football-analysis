@@ -7,18 +7,15 @@ from pydantic import Field
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # Keys
     ROBOFLOW_API_KEY: str = Field(..., description="Roboflow API key for hosted inference")
     HF_TOKEN: str | None = Field(default=None, description="Hugging Face token (optional)")
 
-    # Models (from the notebook)
     PLAYER_MODEL_ID: str = "football-players-detection-3zvbc/11"
     FIELD_MODEL_ID: str = "football-field-detection-f07vi/14"
 
     # Runtime
     DEVICE: str = "cpu"
 
-    # Detection thresholds
     DET_CONF: float = 0.30
     FIELD_CONF: float = 0.30
     KP_CONF: float = 0.50
@@ -38,7 +35,6 @@ class Settings(BaseSettings):
 
 def load_settings() -> Settings:
     s = Settings()
-    # Make HF token available to huggingface/transformers if provided
     if s.HF_TOKEN:
         import os
         os.environ["HF_TOKEN"] = s.HF_TOKEN

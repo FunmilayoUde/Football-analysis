@@ -11,5 +11,5 @@ class ByteTrackWrapper:
         self.tracker.reset()
 
     def update(self, detections: sv.Detections) -> sv.Detections:
-        # tracker_id will be populated
+        
         return self.tracker.update_with_detections(detections)

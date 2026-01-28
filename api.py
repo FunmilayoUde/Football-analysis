@@ -9,7 +9,7 @@ from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from main import main as run_pipeline  # your pipeline entry
+from main import main as run_pipeline  
 
 
 app = FastAPI(title="Soccer Analytics API")
@@ -20,19 +20,17 @@ OUTPUTS_DIR = BASE_DIR / "outputs"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
-# demo-only in-memory job store (use Redis/DB in real setup)
 JOBS: Dict[str, Dict[str, Any]] = {}
 
 
 class JobStatus(BaseModel):
     job_id: str
-    status: str  # queued | running | done | failed
+    status: str  
     error: Optional[str] = None
     artifacts: Optional[Dict[str, str]] = None
 
 
 def _is_mp4(upload: UploadFile) -> bool:
-    # Content-Type isn't always reliable; we also check filename.
     name_ok = (upload.filename or "").lower().endswith(".mp4")
     type_ok = (upload.content_type or "").lower() in ("video/mp4", "application/octet-stream")
     return name_ok and type_ok
@@ -47,7 +45,6 @@ def _run_job(job_id: str, video_path: Path, enable_team: bool):
 
         run_pipeline(str(video_path), out_dir=str(out_dir), enable_team=enable_team)
 
-        # expected outputs from your script
         annotated = out_dir / "annotated.mp4"
         csv_path = out_dir / "per_frame_tracks.csv"
 
@@ -75,7 +72,7 @@ async def analyze_video(
     job_id = str(uuid.uuid4())
     JOBS[job_id] = {"job_id": job_id, "status": "queued", "error": None, "artifacts": None}
 
-    # Save upload to disk
+    
     video_path = UPLOADS_DIR / f"{job_id}.mp4"
     with video_path.open("wb") as f:
         shutil.copyfileobj(file.file, f)

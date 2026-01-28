@@ -1,10 +1,7 @@
 from __future__ import annotations
-
 import numpy as np
 import supervision as sv
 
-
-# Notebook class IDs (IMPORTANT)
 BALL_ID = 0
 GOALKEEPER_ID = 1
 PLAYER_ID = 2
