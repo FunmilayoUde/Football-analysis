@@ -25,12 +25,33 @@ class Settings(BaseSettings):
     MIN_AREA_RATIO_PEOPLE: float = 0.00008
     MIN_AREA_RATIO_BALL: float = 0.00001
 
+    # Tracker (ByteTrack)
+    TRACK_ACTIVATION_THRESHOLD: float = 0.25
+    LOST_TRACK_BUFFER: int = 60
+    MINIMUM_MATCHING_THRESHOLD: float = 0.80
+    TRACK_FRAME_RATE: int = 30
+
+    # ReID
+    REID_ENABLED: bool = True
+    REID_MATCH_THRESHOLD: float = 0.40
+    REID_GALLERY_ALPHA: float = 0.90
+    REID_LOST_BUFFER: int = 90
+
     # Homography estimation
     H_EMA_ALPHA: float = 0.80
     RANSAC_REPROJ_THRESH: float = 3.0
     MIN_KP: int = 6
     MIN_INLIER_RATIO: float = 0.55
     MAX_REPROJ_ERR: float = 8.0
+    H_JUMP_GATE_PX: float = 50.0
+    H_FALLBACK_EXPIRY: int = 30
+
+    # Keypoint skip / adaptive scheduling
+    KP_SKIP_FRAMES: int = 3
+    KP_MOTION_THRESHOLD: float = 8.0
+
+    # ReID inference
+    REID_FP16: bool = True
 
 
 def load_settings() -> Settings:

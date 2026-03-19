@@ -10,3 +10,5 @@ class HomographyResult:
     n_points: int
     inlier_ratio: float
     reproj_err: float
+    degraded: bool = False
+    fallback_age: int = 0
