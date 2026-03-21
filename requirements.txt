@@ -18,7 +18,7 @@ streamlit==1.38.0
 
 # CV tooling
 supervision==0.22.0
-inference==0.16.2
+inference-gpu==0.16.2
 
 # ML
 torch==2.4.1
