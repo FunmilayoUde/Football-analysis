@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     DET_CONF: float = 0.30
     FIELD_CONF: float = 0.30
-    KP_CONF: float = 0.50
+    KP_CONF: float = 0.40
     BALL_PAD_PX: int = 10
 
     # Tiny box filtering (ratio relative to frame area)
@@ -40,9 +40,9 @@ class Settings(BaseSettings):
     # Homography estimation
     H_EMA_ALPHA: float = 0.80
     RANSAC_REPROJ_THRESH: float = 3.0
-    MIN_KP: int = 6
-    MIN_INLIER_RATIO: float = 0.55
-    MAX_REPROJ_ERR: float = 8.0
+    MIN_KP: int = 5
+    MIN_INLIER_RATIO: float = 0.35
+    MAX_REPROJ_ERR: float = 10.0
     H_JUMP_GATE_PX: float = 50.0
     H_FALLBACK_EXPIRY: int = 30
 
