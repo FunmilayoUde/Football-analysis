@@ -1,215 +1,246 @@
-# Soccer Analytics Pipeline (Detection • Tracking • Teams • Homography)
+# Soccer Analytics Pipeline (Detection · Tracking · Teams · Homography)
 
-This project runs a soccer analytics pipeline that:
-- Detects players/ball/referees/goalkeepers
-- Tracks identities across frames
-- Classifies teams (optional)
-- Estimates homography from field keypoints and projects entities to pitch coordinates
-- Outputs:
-  - Annotated video (`annotated.mp4`)
-  - Per-frame CSV (`per_frame_tracks.csv`)
-  - Basic run logs (via console + CSV metadata columns)
+A computer-vision pipeline that processes football match footage and produces:
 
-It can be run:
-1) As a local script (`main.py`)
-2) As an API (FastAPI) with background jobs (`api.py`)
-3) With a Streamlit frontend (`streamlit_app.py`)
+- An **annotated video** with stable player IDs, team colors, and a top-down minimap.
+- A **per-frame CSV** with track IDs, classes, image-space boxes, and pitch-space coordinates.
+- Console diagnostics (homography quality, ID stability, team-classification status).
 
----
+## Features
 
-## 1) Project Structure
+- **Detection** — players, goalkeepers, referees, and the ball (Roboflow-hosted YOLO models).
+- **Tracking** — BoTSort with ReID, wrapped in a 4-pass `IDStabilizer` that handles re-entry, occlusions, and team-color veto.
+- **Homography** — RANSAC fit on field keypoints with EMA smoothing, condition-number filtering, and full-frame reprojection check.
+- **Team classification** — lightweight HSV-histogram color classifier (`ColorTeamClassifier`), vote-stabilized per track.
+- **Goalkeeper sanity** — demotes false-positive GKs that aren't near a goal zone.
 
-Typical layout:
-your_project/
-main.py
-api.py
-streamlit_app.py
-requirements.txt
-core/
-vision/
-geometry/
-io_utils/
-outputs/
-uploads/
+## Three ways to run it
 
+1. **CLI script** — `main.py` (or the `run.sh` helper).
+2. **REST API** — `api.py` (FastAPI, background jobs).
+3. **Web UI** — `streamlit_app.py` (talks to the API).
 
 ---
 
-## 2) Requirements
+## 1. Requirements
 
-- Python 3.10+ (Python 3.11 recommended)
-- ffmpeg installed (recommended for reliable video IO)
+- Python **3.10+** (3.11 recommended)
+- `ffmpeg` on PATH (recommended for reliable video I/O)
+- A Roboflow API key with access to the player and field models
 
-### Install Python dependencies
-From the project root:
+### Install
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-If you are adding the API + Streamlit, ensure these are included in requirements.txt:
+```
 
-fastapi
+> **Streamlit note:** `streamlit` is intentionally **not** in `requirements.txt` because it can conflict with the Roboflow `inference` stack. Install it in a separate venv if you need the UI:
+>
+> ```bash
+> pip install streamlit==1.38.0 requests
+> ```
 
-uvicorn[standard]
+---
 
-python-multipart
+## 2. Configuration (`.env`)
 
-streamlit
+Create a `.env` file at the project root. **`.env` is gitignored** — never commit it.
 
-requests
+Minimal template:
 
-3) Configuration (Roboflow / Model IDs)
-This project loads models published on Roboflow. You must provide:
+```dotenv
+ROBOFLOW_API_KEY=your_roboflow_key_here
+HF_TOKEN=optional_huggingface_token
 
-ROBOFLOW_API_KEY
+PLAYER_MODEL_ID=footballs-player-detection-zkams-zia6c/2
+FIELD_MODEL_ID=football-field-detection-f07vi/15
 
-PLAYER_MODEL_ID
+DEVICE=cpu                # or "cuda" if you have a GPU
+MAX_FRAMES=0              # 0 = process the whole video
+DETECT_EVERY_N=1
+HOMOGRAPHY_EVERY_N=1
+TEAM_MODE=color
+```
 
-FIELD_MODEL_ID
+Useful additional knobs (defaults live in `core/config.py`):
 
-Option A: Environment Variables (recommended)
-Set these in your shell:
+```dotenv
+# Detection / preprocessing
+DET_CONF=0.30
+KP_CONF=0.30
+PREPROCESS_ENABLED=true
 
-PowerShell (Windows)
+# Homography
+H_EMA_ALPHA=0.50
+RANSAC_REPROJ_THRESH=25.0
+MIN_KP=6
+MIN_INLIER_RATIO=0.30
+MAX_REPROJ_ERR=80.0
 
-setx ROBOFLOW_API_KEY "YOUR_KEY"
-setx PLAYER_MODEL_ID "YOUR_ROBOFLOW_PLAYER_MODEL_ID"
-setx FIELD_MODEL_ID "YOUR_ROBOFLOW_FIELD_MODEL_ID"
-Restart your terminal after setx.
+# Tracking (BoTSort + ReID)
+TRACKER_TYPE=botsort
+BOTSORT_WITH_REID=true
+BOTSORT_REID_MODEL=yolo11n-cls.pt
+TRACK_LOST_BUFFER=45
 
-Mac/Linux
+# ID stabilization
+ID_RELINK_FRAMES=5400
+ID_MEMORY_FRAMES=5400
+ID_RELINK_PX=130
+ID_APP_WEIGHT=0.80
+ID_GALLERY_SIZE=64
+ID_MAX_PLAYER_IDS=22
+ID_MAX_GOALKEEPER_IDS=2
+ID_MAX_REFEREE_IDS=2
+```
 
-export ROBOFLOW_API_KEY="YOUR_KEY"
-export PLAYER_MODEL_ID="YOUR_ROBOFLOW_PLAYER_MODEL_ID"
-export FIELD_MODEL_ID="YOUR_ROBOFLOW_FIELD_MODEL_ID"
-Option B: .env file
-If your load_settings() supports .env, create a .env in project root:
+The full set of supported keys is in `core/config.py`.
 
-ROBOFLOW_API_KEY=YOUR_KEY
-PLAYER_MODEL_ID=YOUR_ROBOFLOW_PLAYER_MODEL_ID
-FIELD_MODEL_ID=YOUR_ROBOFLOW_FIELD_MODEL_ID
-4) Run as a Script (main.py)
-Edit the bottom of main.py:
+---
 
-if __name__ == "__main__":
-    SOURCE_VIDEO = r"C:\path\to\match.mp4"
-    main(SOURCE_VIDEO, out_dir="outputs", enable_team=True)
-Run:
+## 3. Run as a CLI script
 
-python main.py
-Outputs:
+`main.py` uses argparse — you don't need to edit any file.
 
-outputs/annotated.mp4
+```bash
+python3 main.py \
+  --source-video path/to/match.mp4 \
+  --out-dir outputs \
+  --enable-team
+```
 
-outputs/per_frame_tracks.csv
+**Flags**
 
-Notes
-If your machine is slow / hangs, run in “demo mode”:
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--source-video` | yes | Path to input MP4 |
+| `--out-dir` | no (default `outputs`) | Where to write artifacts |
+| `--enable-team` | no | Turn on team-color classification |
 
-enable_team=False (team classification is heavy)
+**Or use the helper script** (edit `run.sh` to point at your video):
 
-or reduce team fitting:
+```bash
+./run.sh
+```
 
-fit_team_stride=60
+**Outputs** (in `--out-dir`):
 
-fit_team_max_frames=20
+- `annotated.mp4` — annotated video with side-panel minimap
+- `per_frame_tracks.csv` — per-frame, per-track records
 
-Example:
+---
 
-main(SOURCE_VIDEO, out_dir="outputs", enable_team=False)
-5) Run as an API (FastAPI)
-The API accepts a video upload (mp4), creates a job, runs the pipeline in the background, and exposes artifacts.
+## 4. Run as a REST API
 
-Start the API server
-From project root:
-
+```bash
 uvicorn api:app --reload --host 0.0.0.0 --port 8000
-Endpoints
-POST /analyze-video
-Upload an MP4 and start processing
+```
 
-Returns job_id immediately
+### Endpoints
 
-Example (curl):
+**`POST /analyze-video`** — upload an MP4, kick off a background job.
 
-curl -X POST "http://127.0.0.1:8000/analyze-video?enable_team=false" \
-  -F "file=@HILAL-AHLI_match_B_up1.mp4"
+```bash
+curl -X POST "http://127.0.0.1:8000/analyze-video?enable_team=true" \
+  -F "file=@match.mp4"
+```
+
 Response:
 
-{
-  "job_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "status": "queued"
-}
-GET /jobs/{job_id}
-Check status:
+```json
+{ "job_id": "…", "status": "queued" }
+```
 
+**`GET /jobs/{job_id}`** — poll status (`queued`, `running`, `done`, `failed`).
+
+```bash
 curl "http://127.0.0.1:8000/jobs/<job_id>"
-Status values:
+```
 
-queued
+**`GET /jobs/{job_id}/artifacts/{filename}`** — download outputs once `done`.
 
-running
-
-done
-
-failed
-
-GET /jobs/{job_id}/artifacts/{filename}
-Download artifacts once done:
-
-annotated.mp4
-
-per_frame_tracks.csv
-
-Example:
-
+```bash
 curl -O "http://127.0.0.1:8000/jobs/<job_id>/artifacts/annotated.mp4"
 curl -O "http://127.0.0.1:8000/jobs/<job_id>/artifacts/per_frame_tracks.csv"
-Where files are stored
-Uploaded videos: uploads/{job_id}.mp4
+```
 
-Outputs: outputs/{job_id}/
+Files on disk:
+- Uploads: `uploads/{job_id}.mp4`
+- Outputs: `outputs/{job_id}/`
 
-6) Run with Streamlit Frontend
-Streamlit provides a UI to upload an MP4, trigger processing, poll status, and download outputs.
+---
 
-Start API first (Terminal 1)
+## 5. Run with the Streamlit UI
+
+Start the API in one terminal, the UI in another:
+
+```bash
+# Terminal 1
 uvicorn api:app --reload --port 8000
-Start Streamlit (Terminal 2)
+
+# Terminal 2 (use a venv that has streamlit installed)
 streamlit run streamlit_app.py
-Open the Streamlit URL printed in the terminal (usually):
+```
 
-http://localhost:8501
+Open `http://localhost:8501`. The UI lets you upload a clip, toggle team classification, watch progress, and download the annotated video and CSV.
 
-What you can do in the UI
-Upload MP4
+---
 
-Toggle “Enable team classification” (recommended OFF for slower laptops)
+## 6. Project layout
 
-Click “Analyze video”
+```
+.
+├── main.py                # CLI entry point
+├── api.py                 # FastAPI service
+├── streamlit_app.py       # Streamlit frontend
+├── run.sh                 # one-liner CLI helper
+├── requirements.txt
+├── .env                   # local config (gitignored)
+│
+├── core/
+│   └── config.py          # Pydantic Settings (reads .env)
+├── vision/
+│   ├── detect.py          # Roboflow inference wrappers
+│   ├── track.py           # BoTSort tracker
+│   ├── id_stabilizer.py   # 4-pass ID stabilization
+│   ├── team_color.py      # HSV team classifier
+│   ├── teams.py           # team assignment glue
+│   └── …
+├── geometry/
+│   └── homography.py      # RANSAC homography + EMA smoothing
+└── io_utils/
+    ├── writers.py         # video + CSV writers
+    └── minimap.py         # side-panel renderer
+```
 
-Watch status updates
+---
 
-View the annotated output
+## 7. Troubleshooting
 
-Download the CSV
+**Pipeline runs but homography is mostly `HOLD`**
+- Lower `MIN_INLIER_RATIO` (e.g. `0.25`) and raise `MAX_REPROJ_ERR` (e.g. `100`) in `.env`.
+- Check the `[homography] reject reason=…` lines printed at startup — they tell you which threshold is failing.
 
-7) Troubleshooting
-A) “System hangs / very slow”
-Common causes:
+**Player IDs keep changing after re-entry**
+- Increase `ID_RELINK_FRAMES` and `ID_MEMORY_FRAMES`.
+- Confirm `BOTSORT_WITH_REID=true` and that `yolo11n-cls.pt` is present in the project root.
+- If team classification is on, IDs benefit from team-color veto — re-runs after the classifier is "ready" usually stabilize quickly.
 
-Team classification embeddings (SigLIP) are heavy
+**Goalkeepers labeled as players (or vice versa)**
+- The pipeline only demotes a GK→player when the detection is far from either goal zone (controlled by `GK_GOAL_ZONE_X_M` in `main.py`). It never promotes a player to GK, by design.
 
-CPU-only inference on long videos
+**Slow on CPU**
+- Set `DETECT_EVERY_N=2` (run detector every other frame) and `HOMOGRAPHY_EVERY_N=2`.
+- Set `MAX_FRAMES` to a small value (e.g. `300`) for quick iteration.
+- Run without `--enable-team` for the fastest path.
 
-Fixes:
+**Roboflow auth errors**
+- Confirm `ROBOFLOW_API_KEY` in `.env` is set and that your account has access to both `PLAYER_MODEL_ID` and `FIELD_MODEL_ID`.
 
-Run with enable_team=False
+---
 
-Reduce team fitting load:
+## 8. Branch / deliverable
 
-increase fit_team_stride (e.g., 60)
-
-reduce fit_team_max_frames (e.g., 20)
-
-Test with a short clip first (30–60s)
-
+This branch (`final-deliverable`) contains the full pipeline as described above.
