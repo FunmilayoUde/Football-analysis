@@ -376,6 +376,8 @@ def main(
     inlier_ratio = 0.0
     reproj_err = 1e9
     track_len = {}
+    track_class: dict[int, int] = {}
+    gk_demotions_pre_track = 0
 
     start_time = time.time()
     processed_frames = 0
@@ -420,6 +422,34 @@ def main(
                     min_area_ratio_people=s.MIN_AREA_RATIO_PEOPLE,
                     min_area_ratio_ball=s.MIN_AREA_RATIO_BALL,
                 )
+
+                # Pre-tracking GK demotion: if previous-frame H is available, project
+                # GK detections to pitch coords and demote any that are far from either
+                # goal zone BEFORE they enter the tracker. This prevents misclassified
+                # GKs from acquiring a GK-pool stable ID, which the post-hoc demotion
+                # at step 5c could not undo (causing cross-pool ID flicker).
+                if last_hmat is not None and det.class_id is not None and len(det) > 0:
+                    gk_det_mask = det.class_id == GOALKEEPER_ID
+                    if np.any(gk_det_mask):
+                        try:
+                            gk_pitch_xy = project_anchors_to_pitch(
+                                last_hmat, det[gk_det_mask], anchor=sv.Position.BOTTOM_CENTER
+                            )
+                        except Exception:
+                            gk_pitch_xy = None
+                        if gk_pitch_xy is not None:
+                            gk_indices = np.where(gk_det_mask)[0]
+                            new_cls = det.class_id.copy()
+                            for j, idx in enumerate(gk_indices):
+                                xm = float(gk_pitch_xy[j, 0])
+                                if not np.isfinite(xm):
+                                    continue
+                                near_left = abs(xm - pitch_xmin) <= GK_GOAL_ZONE_X_M
+                                near_right = abs(pitch_xmax - xm) <= GK_GOAL_ZONE_X_M
+                                if not (near_left or near_right):
+                                    new_cls[int(idx)] = PLAYER_ID
+                                    gk_demotions_pre_track += 1
+                            det.class_id = new_cls
 
                 raw_ball_det = det[det.class_id == BALL_ID]
                 if len(raw_ball_det) > 0 and s.BALL_PAD_PX > 0:
@@ -790,6 +820,8 @@ def main(
                 class_id = int(tracks.class_id[i])
                 row_team_id = team_by_track.get(track_id, -1) if class_id == PLAYER_ID else -1
                 track_len[track_id] = track_len.get(track_id, 0) + 1
+                if track_id >= 0:
+                    track_class[track_id] = class_id
 
                 row = {
                     "frame": frame_idx,
@@ -904,6 +936,19 @@ def main(
     h_est.report_failure_summary()
     print(f"Valid projection rows: {valid_projection_rows}/{max(total_rows, 1)}")
     print(f"Elapsed: {elapsed:.2f}s | Effective FPS: {fps:.2f}")
+
+    unique_player_ids = sum(1 for cid in track_class.values() if cid == PLAYER_ID)
+    unique_gk_ids = sum(1 for cid in track_class.values() if cid == GOALKEEPER_ID)
+    unique_ref_ids = sum(1 for cid in track_class.values() if cid == REFEREE_ID)
+    team_a = sum(1 for t in team_by_track.values() if int(t) == 0)
+    team_b = sum(1 for t in team_by_track.values() if int(t) == 1)
+    team_unknown = sum(1 for t in team_by_track.values() if int(t) < 0)
+    print(
+        f"Unique IDs: players={unique_player_ids}, goalkeepers={unique_gk_ids}, "
+        f"referees={unique_ref_ids}"
+    )
+    print(f"Team distribution: A={team_a}, B={team_b}, unknown={team_unknown}")
+    print(f"Pre-tracking GK demotions: {gk_demotions_pre_track}")
 
     short_tracks = sum(1 for _, n in track_len.items() if n <= 5)
     metrics = {
