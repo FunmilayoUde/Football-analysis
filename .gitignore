@@ -90,6 +90,7 @@ results/
 .baseline/
 outputs_test/
 *.pt
+!yolo11n-cls.pt
 
 # -------------------------
 # OS / misc
