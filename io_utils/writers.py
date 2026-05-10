@@ -9,15 +9,19 @@ import supervision as sv
 
 
 class CSVWriter:
-    def __init__(self, path: str):
+    def __init__(self, path: str, fieldnames: list[str] | None = None):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.f = self.path.open("w", newline="", encoding="utf-8")
         self.w = None
+        self.fieldnames = fieldnames
+        if self.fieldnames is not None:
+            self.w = csv.DictWriter(self.f, fieldnames=self.fieldnames, extrasaction="ignore")
+            self.w.writeheader()
 
     def write_row(self, row: Dict[str, Any]) -> None:
         if self.w is None:
-            self.w = csv.DictWriter(self.f, fieldnames=list(row.keys()))
+            self.w = csv.DictWriter(self.f, fieldnames=list(row.keys()), extrasaction="ignore")
             self.w.writeheader()
         self.w.writerow(row)
 

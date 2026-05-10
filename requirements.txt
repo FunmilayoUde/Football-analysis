@@ -1,10 +1,12 @@
-numpy==1.26.4
-opencv-python==4.8.0.76
+numpy>=2.0.0,<2.4.0
+opencv-python==4.10.0.84
+onnxruntime==1.20.1
 tqdm==4.66.5
-requests==2.27
+requests==2.32.3
 
 # Config / validation
-pydantic==2.8.2
+# Keep this aligned with `inference` / `inference-models` constraints.
+pydantic>=2.11.7,<2.12.0
 pydantic-settings==2.4.0
 python-dotenv==1.0.1
 
@@ -14,17 +16,19 @@ uvicorn[standard]==0.30.6
 python-multipart==0.0.9
 
 # Frontend
-streamlit==1.38.0
+# NOTE:
+# Streamlit can conflict with the newer Roboflow inference stack used by main.py.
+# Install it separately only if you need streamlit_app.py.
+# streamlit==1.38.0
 
 # CV tooling
-supervision==0.22.0
-inference==0.16.2
+supervision==0.27.0.post2
+inference==1.2.2
+ultralytics>=8.4.37,<8.5.0
+lap>=0.5.13,<0.6
 
-# ML
-torch==2.4.1
-transformers==4.55.4
-tokenizers==0.21.4
-huggingface_hub==0.34.0
-safetensors==0.4.5
+# ML deps are resolved transitively by `inference` and `sports`.
+# This explicit range avoids pip backtracking on newer `sports` installs.
+transformers>=5.2.0,<5.3.0
 
 git+https://github.com/roboflow/sports.git@main
